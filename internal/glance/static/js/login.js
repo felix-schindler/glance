@@ -31,26 +31,39 @@ const lang = {
     incorrectCredentials: "Incorrect username or password",
     rateLimited: "Too many login attempts, try again in a few minutes",
     unknownError: "An error occurred, please try again",
+    oidcError: "Single sign-on failed, please try again",
 };
 
-container.clearStyles("display");
-setTimeout(() => usernameInput.focus(), 200);
+const urlParams = new URLSearchParams(window.location.search);
+if (errorMessage && urlParams.get("error") === "oidc") {
+    errorMessage.text(lang.oidcError);
+}
 
-toggleVisibilityButton
-    .html(showPasswordSVG)
-    .attr("title", lang.showPassword)
-    .on("click", function() {
-        if (passwordInput.type === "password") {
-            passwordInput.type = "text";
-            toggleVisibilityButton.html(hidePasswordSVG).attr("title", lang.hidePassword);
-            return;
-        }
+if (usernameInput) {
+    setTimeout(() => usernameInput.focus(), 200);
+}
 
-        passwordInput.type = "password";
-        toggleVisibilityButton.html(showPasswordSVG).attr("title", lang.showPassword);
-    });
+if (toggleVisibilityButton && passwordInput) {
+    toggleVisibilityButton
+        .html(showPasswordSVG)
+        .attr("title", lang.showPassword)
+        .on("click", function() {
+            if (passwordInput.type === "password") {
+                passwordInput.type = "text";
+                toggleVisibilityButton.html(hidePasswordSVG).attr("title", lang.hidePassword);
+                return;
+            }
+
+            passwordInput.type = "password";
+            toggleVisibilityButton.html(showPasswordSVG).attr("title", lang.showPassword);
+        });
+}
 
 function enableLoginButtonIfCriteriaMet() {
+    if (!usernameInput || !passwordInput || !loginButton) {
+        return;
+    }
+
     const usernameValue = usernameInput.value.trim();
     const passwordValue = passwordInput.value.trim();
 
@@ -70,22 +83,29 @@ function enableLoginButtonIfCriteriaMet() {
     );
 }
 
-function handleKeydown(event) {
-    if (event.key === "Enter") {
-        const isDisabled = loginButton.disabled;
-        if (!isDisabled) {
-            handleLoginAttempt();
-        }
-    }
+function handleLoginWithEnter(event) {
+    if (event.key !== "Enter") return;
+    if (!loginButton || loginButton.disabled) return;
+
+    document.activeElement.blur();
+    handleLoginAttempt();
 }
 
-usernameInput.on("keydown", handleKeydown);
-passwordInput.on("keydown", handleKeydown);
+if (usernameInput && passwordInput) {
+    usernameInput
+        .on("input", enableLoginButtonIfCriteriaMet)
+        .on("keydown", handleLoginWithEnter);
 
-usernameInput.on("input", enableLoginButtonIfCriteriaMet);
-passwordInput.on("input", enableLoginButtonIfCriteriaMet);
+    passwordInput
+        .on("input", enableLoginButtonIfCriteriaMet)
+        .on("keydown", handleLoginWithEnter);
+}
 
 async function handleLoginAttempt() {
+    if (!usernameInput || !passwordInput || !loginButton || !errorMessage) {
+        return;
+    }
+
     state.lastUsername = usernameInput.value;
     state.lastPassword = passwordInput.value;
     errorMessage.text("");
@@ -108,7 +128,7 @@ async function handleLoginAttempt() {
     if (response.status === 200) {
         setTimeout(() => { window.location.href = pageData.baseURL + "/"; }, 300);
 
-        container.animate({
+        container?.animate({
             keyframes: [{ offset: 1, transform: "scale(0.95)", opacity: 0 }],
             options: { duration: 300, easing: "ease", fill: "forwards" }}
         );
@@ -137,4 +157,6 @@ async function handleLoginAttempt() {
     }
 }
 
-loginButton.disable().on("click", handleLoginAttempt);
+if (loginButton) {
+    loginButton.disable().on("click", handleLoginAttempt);
+}

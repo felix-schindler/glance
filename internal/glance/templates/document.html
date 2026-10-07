@@ -9,10 +9,11 @@
         baseURL: "{{ .App.Config.Server.BaseURL }}",
         theme: "{{ .Request.Theme.Key }}",
     };
+    if (pageData.theme === "auto" && matchMedia("(prefers-color-scheme: light)").matches) document.documentElement.setAttribute("data-scheme", "light");
     </script>
     <title>{{ block "document-title" . }}{{ end }}</title>
     <meta charset="UTF-8">
-    <meta name="color-scheme" content="dark">
+    <meta name="color-scheme" content="{{ if eq .Request.Theme.Key "auto" }}dark light{{ else }}dark{{ end }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">

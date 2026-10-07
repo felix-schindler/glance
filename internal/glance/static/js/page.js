@@ -687,10 +687,17 @@ async function changeTheme(key, onChanged) {
 
     themeStyleElem.html(newThemeStyle);
     document.documentElement.setAttribute("data-theme", key);
-    document.documentElement.setAttribute("data-scheme", response.headers.get("X-Scheme"));
+    document.documentElement.setAttribute("data-scheme",
+        key === "auto" ? (prefersLightScheme.matches ? "light" : "dark") : response.headers.get("X-Scheme"));
     typeof onChanged == "function" && onChanged();
     setTimeout(() => { tempStyle.remove(); }, 10);
 }
+
+const prefersLightScheme = matchMedia("(prefers-color-scheme: light)");
+prefersLightScheme.addEventListener("change", () => {
+    if (pageData.theme !== "auto") return;
+    document.documentElement.setAttribute("data-scheme", prefersLightScheme.matches ? "light" : "dark");
+});
 
 function initThemePicker() {
     const themeChoicesInMobileNav = find(".mobile-navigation .theme-choices");

@@ -601,6 +601,8 @@ theme:
 
 To override the default dark and light themes, use the key names `default-dark` and `default-light`.
 
+The theme picker also offers an `Auto` option which follows the operating system's color scheme, switching between `default-dark` and `default-light`.
+
 ## Pages & Columns
 ![illustration of pages and columns](images/pages-and-columns-illustration.png)
 

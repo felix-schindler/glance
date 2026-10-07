@@ -38,6 +38,29 @@ func (a *application) handleThemeChangeRequest(w http.ResponseWriter, r *http.Re
 	w.Write([]byte(properties.CSS))
 }
 
+func newAutoThemePreset(dark, light *themeProperties) *themeProperties {
+	darkCSS := ":root{}"
+	backgroundHex := "#151519"
+	if dark != nil {
+		darkCSS = string(dark.CSS)
+		if dark.BackgroundColorAsHex != "" {
+			backgroundHex = dark.BackgroundColorAsHex
+		}
+	}
+
+	autoCSS := darkCSS
+	if light != nil {
+		autoCSS += "@media (prefers-color-scheme: light){" + string(light.CSS) + "}"
+	}
+
+	return &themeProperties{
+		Key:                  "auto",
+		CSS:                  template.CSS(autoCSS),
+		PreviewHTML:          template.HTML(`<button class="theme-preset" style="background:linear-gradient(135deg,hsl(240,8%,9%) 50%,hsl(240,13%,95%) 50%)" data-key="auto" title="Auto"></button>`),
+		BackgroundColorAsHex: backgroundHex,
+	}
+}
+
 type themeProperties struct {
 	BackgroundColor          *hslColorField `yaml:"background-color"`
 	PrimaryColor             *hslColorField `yaml:"primary-color"`

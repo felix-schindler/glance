@@ -150,6 +150,24 @@ func newApplication(c *config) (*application, error) {
 		return nil, fmt.Errorf("initializing default theme: %v", err)
 	}
 
+	if !config.Theme.DisablePicker {
+		if _, exists := config.Theme.Presets.Get("auto"); !exists {
+			darkPreset, _ := config.Theme.Presets.Get("default-dark")
+			lightPreset, _ := config.Theme.Presets.Get("default-light")
+			keys := []string{"auto"}
+			values := []*themeProperties{newAutoThemePreset(darkPreset, lightPreset)}
+			for key, properties := range config.Theme.Presets.Items() {
+				keys = append(keys, key)
+				values = append(values, properties)
+			}
+			autoPresets, err := newOrderedYAMLMap(keys, values)
+			if err != nil {
+				return nil, fmt.Errorf("creating auto theme preset: %v", err)
+			}
+			config.Theme.Presets = *autoPresets
+		}
+	}
+
 	//
 	// Init pages
 	//

@@ -17,8 +17,8 @@ func loginTemplateData(app *application) *templateData {
 	}
 }
 
-func TestLoginTemplateLocalAndOIDC(t *testing.T) {
-	app := &application{
+func newLoginTemplateTestApp(users map[string]*user, disableLocalLogin bool) *application {
+	return &application{
 		RequiresAuth: true,
 		oidcEnabled:  true,
 		Config: config{
@@ -27,88 +27,45 @@ func TestLoginTemplateLocalAndOIDC(t *testing.T) {
 				Users     map[string]*user `yaml:"users"`
 				OIDC      oidcConfig       `yaml:"oidc"`
 			}{
-				Users: map[string]*user{"admin": {PasswordHash: []byte("x")}},
+				Users: users,
 				OIDC: oidcConfig{
 					Issuer:            "https://example.com",
-					DisableLocalLogin: false,
+					DisableLocalLogin: disableLocalLogin,
 				},
 			},
 		},
-	}
-
-	var buf bytes.Buffer
-	if err := loginPageTemplate.Execute(&buf, loginTemplateData(app)); err != nil {
-		t.Fatal(err)
-	}
-
-	out := buf.String()
-	if !strings.Contains(out, `id="username"`) {
-		t.Fatalf("expected username field, got:\n%s", out)
-	}
-	if !strings.Contains(out, "SIGN IN WITH SSO") {
-		t.Fatal("expected SSO button")
 	}
 }
 
-func TestLoginTemplateOIDCOnly(t *testing.T) {
-	app := &application{
-		RequiresAuth: true,
-		oidcEnabled:  true,
-		Config: config{
-			Auth: struct {
-				SecretKey string           `yaml:"secret-key"`
-				Users     map[string]*user `yaml:"users"`
-				OIDC      oidcConfig       `yaml:"oidc"`
-			}{
-				Users: map[string]*user{},
-				OIDC: oidcConfig{
-					Issuer:            "https://example.com",
-					DisableLocalLogin: false,
-				},
-			},
-		},
+func TestLoginTemplate(t *testing.T) {
+	admin := map[string]*user{"admin": {PasswordHash: []byte("x")}}
+
+	tests := []struct {
+		name         string
+		users        map[string]*user
+		disableLocal bool
+		wantUsername bool
+		wantSSO      bool
+	}{
+		{"LocalAndOIDC", admin, false, true, true},
+		{"OIDCOnly", map[string]*user{}, false, false, true},
+		{"DisableLocalLogin", admin, true, false, true},
 	}
 
-	var buf bytes.Buffer
-	if err := loginPageTemplate.Execute(&buf, loginTemplateData(app)); err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := loginPageTemplate.Execute(&buf, loginTemplateData(newLoginTemplateTestApp(tt.users, tt.disableLocal))); err != nil {
+				t.Fatal(err)
+			}
 
-	out := buf.String()
-	if strings.Contains(out, `id="username"`) {
-		t.Fatalf("should not show username without local users")
-	}
-	if !strings.Contains(out, "SIGN IN WITH SSO") {
-		t.Fatal("expected SSO button")
-	}
-}
-
-func TestLoginTemplateDisableLocalLogin(t *testing.T) {
-	app := &application{
-		RequiresAuth: true,
-		oidcEnabled:  true,
-		Config: config{
-			Auth: struct {
-				SecretKey string           `yaml:"secret-key"`
-				Users     map[string]*user `yaml:"users"`
-				OIDC      oidcConfig       `yaml:"oidc"`
-			}{
-				Users: map[string]*user{"admin": {PasswordHash: []byte("x")}},
-				OIDC: oidcConfig{
-					Issuer:            "https://example.com",
-					DisableLocalLogin: true,
-				},
-			},
-		},
-	}
-
-	var buf bytes.Buffer
-	if err := loginPageTemplate.Execute(&buf, loginTemplateData(app)); err != nil {
-		t.Fatal(err)
-	}
-
-	out := buf.String()
-	if strings.Contains(out, `id="username"`) {
-		t.Fatalf("should not show username when disable-local-login is true")
+			out := buf.String()
+			if got := strings.Contains(out, `id="username"`); got != tt.wantUsername {
+				t.Fatalf("username field = %v, want %v", got, tt.wantUsername)
+			}
+			if got := strings.Contains(out, "SIGN IN WITH SSO"); got != tt.wantSSO {
+				t.Fatalf("SSO button = %v, want %v", got, tt.wantSSO)
+			}
+		})
 	}
 }

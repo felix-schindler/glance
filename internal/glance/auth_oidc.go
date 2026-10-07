@@ -24,8 +24,6 @@ const (
 	oidcLoginErrorParam      = "oidc"
 )
 
-var oidcScopes = []string{oidc.ScopeOpenID}
-
 type oidcFlowState struct {
 	State        string `json:"state"`
 	Nonce        string `json:"nonce"`
@@ -52,7 +50,7 @@ func (a *application) initOIDCAuth() error {
 		ClientID:     oidcConfig.ClientID,
 		ClientSecret: oidcConfig.ClientSecret,
 		Endpoint:     provider.Endpoint(),
-		Scopes:       oidcScopes,
+		Scopes:       []string{oidc.ScopeOpenID},
 	}
 	a.oidcEnabled = true
 
@@ -86,7 +84,7 @@ func (a *application) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, nonce, err := randomOIDCStrings(2, 32)
+	state, nonce, err := randomOIDCStateNonce()
 	if err != nil {
 		log.Printf("Could not generate oidc state: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -134,7 +132,7 @@ func (a *application) handleOIDCCallback(w http.ResponseWriter, r *http.Request)
 	a.authAttemptsMu.Unlock()
 
 	if exceededRateLimit {
-		a.redirectOIDCLoginError(w, r)
+		a.failOIDCCallback(w, r, "Rate-limited oidc login from %s", ip)
 		return
 	}
 
@@ -244,26 +242,16 @@ func (a *application) registerOIDCUser(username string) error {
 
 func (a *application) failOIDCCallback(w http.ResponseWriter, r *http.Request, format string, args ...any) {
 	log.Printf(format, args...)
-	a.redirectOIDCLoginError(w, r)
-}
-
-func (a *application) redirectOIDCLoginError(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, a.Config.Server.BaseURL+"/login?error="+oidcLoginErrorParam, http.StatusSeeOther)
 }
 
-func randomOIDCStrings(count, size int) (string, string, error) {
-	bytes := make([]byte, size*count)
-	if _, err := rand.Read(bytes); err != nil {
+func randomOIDCStateNonce() (string, string, error) {
+	var b [64]byte
+	if _, err := rand.Read(b[:]); err != nil {
 		return "", "", err
 	}
 
-	first := base64.RawURLEncoding.EncodeToString(bytes[0:size])
-	if count == 1 {
-		return first, "", nil
-	}
-
-	second := base64.RawURLEncoding.EncodeToString(bytes[size:])
-	return first, second, nil
+	return base64.RawURLEncoding.EncodeToString(b[:32]), base64.RawURLEncoding.EncodeToString(b[32:]), nil
 }
 
 func (a *application) setOIDCStateCookie(w http.ResponseWriter, r *http.Request, flowState oidcFlowState) error {

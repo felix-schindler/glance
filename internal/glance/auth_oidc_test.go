@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-func TestOIDCStateCookieRoundTrip(t *testing.T) {
+func testOIDCSecretBytes(t *testing.T) []byte {
+	t.Helper()
 	secret, err := makeAuthSecretKey(AUTH_SECRET_KEY_LENGTH)
 	if err != nil {
 		t.Fatalf("Failed to generate secret key: %v", err)
@@ -18,6 +19,12 @@ func TestOIDCStateCookieRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to decode secret key: %v", err)
 	}
+
+	return secretBytes
+}
+
+func TestOIDCStateCookieRoundTrip(t *testing.T) {
+	secretBytes := testOIDCSecretBytes(t)
 
 	app := &application{
 		authSecretKey: secretBytes,
@@ -68,15 +75,7 @@ func TestOIDCStateCookieRoundTrip(t *testing.T) {
 }
 
 func TestRegisterOIDCUserAllowsAuthorization(t *testing.T) {
-	secret, err := makeAuthSecretKey(AUTH_SECRET_KEY_LENGTH)
-	if err != nil {
-		t.Fatalf("Failed to generate secret key: %v", err)
-	}
-
-	secretBytes, err := base64.StdEncoding.DecodeString(secret)
-	if err != nil {
-		t.Fatalf("Failed to decode secret key: %v", err)
-	}
+	secretBytes := testOIDCSecretBytes(t)
 
 	app := &application{
 		RequiresAuth:           true,

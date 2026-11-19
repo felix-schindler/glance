@@ -2114,7 +2114,7 @@ basic-auth:
 ```
 
 ### Releases
-Display a list of latest releases for specific repositories on Github, GitLab, Codeberg or Docker Hub.
+Display a list of latest releases for specific repositories on Github, GitLab, Codeberg, Gitea or Docker Hub.
 
 Example:
 
@@ -2146,14 +2146,25 @@ Preview:
 | collapse-after | integer | no | 5 |
 
 ##### `repositories`
-A list of repositores to fetch the latest release for. Only the name/repo is required, not the full URL. A prefix can be specified for repositories hosted elsewhere such as GitLab, Codeberg and Docker Hub. Example:
+A list of repositories to fetch the latest release for. Only the name/repo is required; GitLab and Gitea can also take a full URL, see below. A prefix can be specified for repositories hosted elsewhere such as GitLab, Codeberg, Gitea and Docker Hub. Example:
 
 ```yaml
 repositories:
   - gitlab:inkscape/inkscape
   - dockerhub:glanceapp/glance
   - codeberg:redict/redict
+  - gitea:gitea/act
 ```
+
+GitLab and Gitea repositories can point to a self-hosted instance by using a full URL after the prefix. Without one, `gitlab.com` and `gitea.com` are used:
+
+```yaml
+repositories:
+  - gitlab:https://gitlab.example.com/group/project
+  - gitea:https://gitea.example.com:3000/owner/repo
+```
+
+The URL must be the root of the instance: instances served under a sub-path, such as `https://example.com/gitea/owner/repo`, are not supported.
 
 Official images on Docker Hub can be specified by omitting the owner:
 
@@ -2185,7 +2196,7 @@ repositories:
 ```
 
 ##### `show-source-icon`
-Shows an icon of the source (GitHub/GitLab/Codeberg/Docker Hub) next to the repository name when set to `true`.
+Shows an icon of the source (GitHub/GitLab/Codeberg/Gitea/Docker Hub) next to the repository name when set to `true`.
 
 ##### `token`
 Without authentication Github allows for up to 60 requests per hour. You can easily exceed this limit and start seeing errors if you're tracking lots of repositories or your cache time is low. To circumvent this you can [create a read only token from your Github account](https://github.com/settings/personal-access-tokens/new) and provide it here.
@@ -2211,7 +2222,7 @@ and then use it in your `glance.yml` like this:
 This way you can safely check your `glance.yml` in version control without exposing the token.
 
 ##### `gitlab-token`
-Same as the above but used when fetching GitLab releases.
+Same as the above but used when fetching GitLab releases. It is sent to every configured GitLab host, including self-hosted ones. There is no equivalent token for Gitea, so private Gitea repositories cannot be fetched.
 
 ##### `limit`
 The maximum number of releases to show.

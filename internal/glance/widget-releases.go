@@ -78,6 +78,7 @@ type releaseSource string
 
 const (
 	releaseSourceCodeberg  releaseSource = "codeberg"
+	releaseSourceGitea     releaseSource = "gitea"
 	releaseSourceGithub    releaseSource = "github"
 	releaseSourceGitlab    releaseSource = "gitlab"
 	releaseSourceDockerHub releaseSource = "dockerhub"
@@ -107,8 +108,9 @@ type releaseRequest struct {
 	IncludePreleases bool   `yaml:"include-prereleases"`
 	Repository       string `yaml:"repository"`
 
-	source releaseSource
-	token  *string
+	source  releaseSource
+	token   *string
+	baseURL string
 }
 
 func (r *releaseRequest) UnmarshalYAML(node *yaml.Node) error {
@@ -139,6 +141,8 @@ func (r *releaseRequest) UnmarshalYAML(node *yaml.Node) error {
 		switch parts[0] {
 		case string(releaseSourceGithub):
 			r.source = releaseSourceGithub
+		case string(releaseSourceGitea):
+			r.source = releaseSourceGitea
 		case string(releaseSourceGitlab):
 			r.source = releaseSourceGitlab
 		case string(releaseSourceDockerHub):
@@ -146,8 +150,24 @@ func (r *releaseRequest) UnmarshalYAML(node *yaml.Node) error {
 		case string(releaseSourceCodeberg):
 			r.source = releaseSourceCodeberg
 		default:
+			if parts[0] == "http" || parts[0] == "https" {
+				return errors.New("a custom URL requires a gitlab: or gitea: prefix")
+			}
 			return errors.New("invalid source")
 		}
+	}
+
+	if u, err := url.Parse(r.Repository); err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https") {
+		if r.source != releaseSourceGitea && r.source != releaseSourceGitlab {
+			return fmt.Errorf("custom URL is not supported for %s repositories", r.source)
+		}
+
+		r.baseURL = u.Scheme + "://" + u.Host
+		r.Repository = strings.Trim(u.Path, "/")
+	}
+
+	if r.Repository == "" {
+		return errors.New("repository is required")
 	}
 
 	return nil
@@ -191,6 +211,8 @@ func fetchLatestReleaseTask(request *releaseRequest) (*appRelease, error) {
 	switch request.source {
 	case releaseSourceCodeberg:
 		return fetchLatestCodebergRelease(request)
+	case releaseSourceGitea:
+		return fetchLatestGiteaRelease(request)
 	case releaseSourceGithub:
 		return fetchLatestGithubRelease(request)
 	case releaseSourceGitlab:
@@ -357,10 +379,16 @@ type gitlabReleaseResponseJson struct {
 }
 
 func fetchLatestGitLabRelease(request *releaseRequest) (*appRelease, error) {
+	baseURL := request.baseURL
+	if baseURL == "" {
+		baseURL = "https://gitlab.com"
+	}
+
 	httpRequest, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf(
-			"https://gitlab.com/api/v4/projects/%s/releases/permalink/latest",
+			"%s/api/v4/projects/%s/releases/permalink/latest",
+			baseURL,
 			url.QueryEscape(request.Repository),
 		),
 		nil,
@@ -387,17 +415,31 @@ func fetchLatestGitLabRelease(request *releaseRequest) (*appRelease, error) {
 	}, nil
 }
 
-type codebergReleaseResponseJson struct {
+type giteaReleaseResponseJson struct {
 	TagName     string `json:"tag_name"`
 	PublishedAt string `json:"published_at"`
 	HtmlUrl     string `json:"html_url"`
 }
 
+func fetchLatestGiteaRelease(request *releaseRequest) (*appRelease, error) {
+	baseURL := request.baseURL
+	if baseURL == "" {
+		baseURL = "https://gitea.com"
+	}
+
+	return fetchLatestForgejoRelease(baseURL, request, releaseSourceGitea)
+}
+
 func fetchLatestCodebergRelease(request *releaseRequest) (*appRelease, error) {
+	return fetchLatestForgejoRelease("https://codeberg.org", request, releaseSourceCodeberg)
+}
+
+func fetchLatestForgejoRelease(baseURL string, request *releaseRequest, source releaseSource) (*appRelease, error) {
 	httpRequest, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf(
-			"https://codeberg.org/api/v1/repos/%s/releases/latest",
+			"%s/api/v1/repos/%s/releases/latest",
+			baseURL,
 			request.Repository,
 		),
 		nil,
@@ -406,13 +448,13 @@ func fetchLatestCodebergRelease(request *releaseRequest) (*appRelease, error) {
 		return nil, err
 	}
 
-	response, err := decodeJsonFromRequest[codebergReleaseResponseJson](defaultHTTPClient, httpRequest)
+	response, err := decodeJsonFromRequest[giteaReleaseResponseJson](defaultHTTPClient, httpRequest)
 	if err != nil {
 		return nil, err
 	}
 
 	return &appRelease{
-		Source:       releaseSourceCodeberg,
+		Source:       source,
 		Name:         request.Repository,
 		Version:      normalizeVersionFormat(response.TagName),
 		NotesUrl:     response.HtmlUrl,
